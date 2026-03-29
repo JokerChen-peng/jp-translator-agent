@@ -92,37 +92,39 @@ export default function TranslationHistory({
           导入时按 id 合并，同 id 以文件为准，最多保留 50 条。
         </p>
       </div>
-      
-      <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+
+      <div className="flex-1 space-y-3 overflow-y-auto pr-1">
         {items.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-gray-300">
-            <p className="text-xs italic">点击翻译下方的 ⭐ 存入</p>
+            <p className="text-xs italic">点击翻译下方的按钮存入</p>
           </div>
         ) : (
           items.map((item) => (
-            <div 
+            <div
               key={item.id}
-              className="group relative bg-white p-3 rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-blue-200 transition-all cursor-pointer"
+              className="group relative cursor-pointer rounded-xl border border-gray-100 bg-white p-3 shadow-sm transition-all hover:border-blue-200 hover:shadow-md"
               onClick={() => onItemClick(item)}
             >
-              {/* 删除小叉号 - 仅在悬停时显示 */}
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation(); // 防止触发点击回填
-                  onDeleteItem(item.id);
-                }}
-                className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity z-10"
-              >
-                ×
-              </button>
-
-              <div className="flex justify-between items-start mb-2">
+              <div className="mb-2 flex items-start justify-between gap-2">
                 <span className="text-[9px] font-bold bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded uppercase">
                   {item.direction === 'ja-zh' ? 'JP → CN' : 'CN → JP'}
                 </span>
-                <span className="text-[9px] text-gray-400 font-mono">
-                  {new Date(item.timestamp).toLocaleDateString()}
-                </span>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <span className="text-[9px] text-gray-400 font-mono">
+                    {new Date(item.timestamp).toLocaleDateString()}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteItem(item.id);
+                    }}
+                    className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[11px] font-bold leading-none text-white opacity-0 shadow-sm transition-opacity group-hover:opacity-100 hover:bg-red-600"
+                    aria-label="删除此条"
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
               <p className="text-xs text-gray-800 font-bold line-clamp-1 mb-1">{item.input}</p>
               <p className="text-[11px] text-gray-500 line-clamp-2 leading-relaxed italic border-l-2 border-blue-100 pl-2">

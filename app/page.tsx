@@ -217,26 +217,61 @@ export default function TranslatorPage() {
       {/* 3. 输入/输出框 */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
 
-        {/* 第一列：输入框 */}
-        <div className="space-y-2 relative">
+        {/* 第一列：输入框（图标相对边框容器定位，避免穿出圆角边框 / 挡住 resize） */}
+        <div className="space-y-2">
           <label className="text-xs font-bold text-gray-400">INPUT</label>
-          <textarea
-            className="w-full h-64 p-4 border rounded-2xl shadow-sm outline-none focus:ring-2 focus:ring-black"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="输入内容..."
-          />
-          {/* ✅ 语音输入按钮 */}
-          <button
-            onClick={() => isListening ? stopListening() : startListening(speechLang)}
-            className={`absolute bottom-4 right-4 p-3 rounded-full transition-all ${isListening
-              ? 'bg-red-500 text-white animate-pulse'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            title="点击语音输入"
-          >
-            {isListening ? '🛑' : '🎤'}
-          </button>
+          <div className="relative rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <textarea
+              className="block w-full h-64 min-h-[16rem] resize-y rounded-2xl border-0 bg-transparent p-4 pb-12 pr-[5.25rem] text-[15px] leading-relaxed outline-none focus:ring-2 focus:ring-inset focus:ring-black"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="输入内容，或使用右下角 📷 / 🎤"
+            />
+            <div className="pointer-events-none absolute bottom-2 right-2 flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => imageInputRef.current?.click()}
+                disabled={isTranslating}
+                className={`pointer-events-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg transition-all disabled:pointer-events-none disabled:opacity-40 ${isTranslating && lastFromImage
+                  ? 'bg-amber-100 text-amber-800 animate-pulse'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                title={isTranslating && lastFromImage ? '正在识别图片…' : '图片翻译'}
+              >
+                📷
+              </button>
+              <button
+                type="button"
+                onClick={() => isListening ? stopListening() : startListening(speechLang)}
+                className={`pointer-events-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg transition-all ${isListening
+                  ? 'bg-red-500 text-white animate-pulse'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                title="语音输入"
+              >
+                {isListening ? '🛑' : '🎤'}
+              </button>
+            </div>
+          </div>
+          {imagePreviewUrl && (
+            <div className="flex items-center gap-2">
+              <img
+                src={imagePreviewUrl}
+                alt="待译预览"
+                className="h-12 w-auto max-w-[100px] rounded-lg border object-cover"
+              />
+              <button
+                type="button"
+                className="text-[10px] text-gray-500 underline"
+                onClick={() => {
+                  if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+                  setImagePreviewUrl(null);
+                }}
+              >
+                清除预览
+              </button>
+            </div>
+          )}
         </div>
 
         {/* 第二列：翻译结果 */}
@@ -336,49 +371,21 @@ export default function TranslatorPage() {
         onChange={handleImageFile}
       />
 
-      <div className="flex flex-col sm:flex-row gap-3 mt-4">
-        <button
-          type="button"
-          disabled={isTranslating}
-          onClick={() => {
-            setLastFromImage(false);
-            translate(input);
-          }}
-          className="flex-1 bg-black text-white py-3 rounded-xl disabled:opacity-50"
-        >
-          {isTranslating && !lastFromImage
-            ? '正在分析语境并翻译...'
+      <button
+        type="button"
+        disabled={isTranslating}
+        onClick={() => {
+          setLastFromImage(false);
+          translate(input);
+        }}
+        className="w-full mt-4 bg-black text-white py-3 rounded-xl disabled:opacity-50"
+      >
+        {isTranslating && !lastFromImage
+          ? '正在分析语境并翻译...'
+          : isTranslating && lastFromImage
+            ? '正在识别图片并翻译…'
             : '立即翻译'}
-        </button>
-        <button
-          type="button"
-          onClick={() => imageInputRef.current?.click()}
-          disabled={isTranslating}
-          className="flex-1 py-3 rounded-xl border-2 border-gray-300 bg-white text-gray-800 hover:bg-gray-50 disabled:opacity-50"
-        >
-          {isTranslating && lastFromImage ? '正在识别图片并翻译…' : '📷 图片翻译'}
-        </button>
-      </div>
-
-      {imagePreviewUrl && (
-        <div className="mt-3 flex items-center gap-3">
-          <img
-            src={imagePreviewUrl}
-            alt="待译预览"
-            className="h-16 w-auto max-w-[120px] rounded-lg border object-cover"
-          />
-          <button
-            type="button"
-            className="text-xs text-gray-500 underline"
-            onClick={() => {
-              if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
-              setImagePreviewUrl(null);
-            }}
-          >
-            清除预览
-          </button>
-        </div>
-      )}
+      </button>
       {/* ✅ 第四列：引用独立组件 */}
       <div className="h-[600px]">
         <TranslationHistory
