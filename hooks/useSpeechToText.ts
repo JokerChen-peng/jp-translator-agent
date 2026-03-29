@@ -8,21 +8,21 @@ export const useSpeechToText = (onResult: (text: string) => void) => {
 
   useEffect(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    
+
     if (SpeechRecognition) {
       const rec = new SpeechRecognition();
-      
+
       // ✅ 关键设置 1：开启连续识别
       // 设为 true 后，即便你中间换气停顿，它也不会自动关闭
-      rec.continuous = true; 
+      rec.continuous = true;
 
       // ✅ 关键设置 2：开启临时结果
       // 设为 true 可以让你在说话的过程中就能看到文字变动，体验更好
-      rec.interimResults = true; 
+      rec.interimResults = true;
 
       rec.onresult = (event: any) => {
         let finalTranscript = '';
-        
+
         // continuous 模式下，结果是一个数组，我们需要遍历它
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           if (event.results[i].isFinal) {

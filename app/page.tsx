@@ -17,6 +17,8 @@ export default function TranslatorPage() {
   const [input, setInput] = useState('');
   const [currentContext, setCurrentContext] = useState('meeting');
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [knowledgeBase, setKnowledgeBase] = useState('');
+  const [ragEnabled, setRagEnabled] = useState(true);
 
   // ✅ 集成语音功能
   const handleSpeechResult = useCallback((result: string) => {
@@ -29,11 +31,22 @@ export default function TranslatorPage() {
   useEffect(() => {
     const saved = localStorage.getItem('translation_history');
     if (saved) setHistory(JSON.parse(saved));
+    const kb = localStorage.getItem('translation_knowledge');
+    if (kb) setKnowledgeBase(kb);
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem('translation_knowledge', knowledgeBase);
+  }, [knowledgeBase]);
 
   const { completion: translatedText, complete: translate, isLoading: isTranslating } = useCompletion({
     api: '/api/translate',
-    body: { context: currentContext, direction, mode: 'translate' },
+    body: {
+      context: currentContext,
+      direction,
+      mode: 'translate',
+      knowledgeBase: ragEnabled ? knowledgeBase : '',
+    },
     streamProtocol: 'text',
   });
   const scrolltranslatedContainerRef = useAutoScroll(translatedText);
@@ -88,11 +101,33 @@ export default function TranslatorPage() {
         </button>
       </div>
 
+      {/* RAG 知识库 */}
+      <div className="mb-6 p-4 rounded-2xl border border-gray-200 bg-gray-50/80 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <label className="text-xs font-bold text-gray-500">知识库（Gemini Embedding RAG）</label>
+          <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={ragEnabled}
+              onChange={(e) => setRagEnabled(e.target.checked)}
+              className="rounded border-gray-300"
+            />
+            启用检索
+          </label>
+        </div>
+        <textarea
+          className="w-full min-h-[88px] p-3 text-sm border rounded-xl bg-white shadow-sm outline-none focus:ring-2 focus:ring-black resize-y"
+          value={knowledgeBase}
+          onChange={(e) => setKnowledgeBase(e.target.value)}
+          placeholder="每段之间空一行，例如术语表、固定译法、例句。翻译时用向量检索最相关的几段注入语境。"
+        />
+      </div>
+
       {/* 3. 输入/输出框 */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
 
         {/* 第一列：输入框 */}
-        <div className="space-y-2">
+        <div className="space-y-2 relative">
           <label className="text-xs font-bold text-gray-400">INPUT</label>
           <textarea
             className="w-full h-64 p-4 border rounded-2xl shadow-sm outline-none focus:ring-2 focus:ring-black"
