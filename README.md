@@ -36,8 +36,8 @@
 ### 1\. 克隆项目
 
 ```bash
-git clone https://github.com/JokerChen-peng/tsproject.git
-cd tsproject
+git clone https://github.com/JokerChen-peng/jp-translator-agent.git
+cd jp-translator-agent
 ```
 
 ### 2\. 配置环境变量
