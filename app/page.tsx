@@ -4,6 +4,7 @@ import { useCompletion } from '@ai-sdk/react';
 import { useState, useEffect, useCallback } from 'react';
 import TranslationHistory, { HistoryItem } from '@/components/TranslationHistory';
 import { useSpeechToText } from '@/hooks/useSpeechToText';
+import { useAutoScroll } from '@/hooks/useAutoScroll';
 const CONTEXTS = [
   { id: 'meeting', label: '🏫 组会', color: 'bg-blue-500' },
   { id: 'business', label: '💼 商务', color: 'bg-green-600' },
@@ -15,8 +16,8 @@ export default function TranslatorPage() {
   const [direction, setDirection] = useState<'ja-zh' | 'zh-ja'>('ja-zh');
   const [input, setInput] = useState('');
   const [currentContext, setCurrentContext] = useState('meeting');
-  const [pronunciation, setPronunciation] = useState('');
   const [history, setHistory] = useState<HistoryItem[]>([]);
+
   // ✅ 集成语音功能
   const handleSpeechResult = useCallback((result: string) => {
     setInput(prev => prev + result);
@@ -35,14 +36,14 @@ export default function TranslatorPage() {
     body: { context: currentContext, direction, mode: 'translate' },
     streamProtocol: 'text',
   });
+  const scrolltranslatedContainerRef = useAutoScroll(translatedText);
   // 新增：标注钩子
-  const { complete: getAnnotate, isLoading: isAnnotating } = useCompletion({
+  const { completion: annotatedText, complete: getAnnotate, isLoading: isAnnotating } = useCompletion({
     api: '/api/translate',
     body: { mode: 'annotate' },
     streamProtocol: 'text',
-    onFinish: (prompt, result) => setPronunciation(result),
   });
-
+  const scrollannotatedContainerRef = useAutoScroll(annotatedText);
 
   //新增：手动保存逻辑
   const handleSaveToHistory = () => {
@@ -116,7 +117,7 @@ export default function TranslatorPage() {
         <div className="space-y-2 relative">
           <label className="text-xs font-bold text-gray-400">TRANSLATION</label>
           {/* 这是包裹翻译结果和按钮的容器，必须有 'relative' 类 */}
-          <div className="w-full h-64 p-4 border rounded-2xl bg-white shadow-sm overflow-y-auto">
+          <div className="w-full h-64 p-4 border rounded-2xl bg-white shadow-sm overflow-y-auto" ref={scrolltranslatedContainerRef}>
             {/* 1. 只要 translatedText 有内容就实时显示，哪怕正在加载中 */}
             <div className="whitespace-pre-wrap text-gray-800">
               {translatedText}
@@ -164,10 +165,10 @@ export default function TranslatorPage() {
         {/* 第三列：五十音/罗马音（对应你画的红框） */}
         <div className="space-y-2">
           <label className="text-xs font-bold text-gray-400">PRONUNCIATION</label>
-          <div className="w-full h-64 p-4 border border-dashed border-orange-200 rounded-2xl bg-orange-50/30 overflow-y-auto">
+          <div className="w-full h-64 p-4 border border-dashed border-orange-200 rounded-2xl bg-orange-50/30 overflow-y-auto relative" ref={scrollannotatedContainerRef}>
             {/* 1. 只要 translatedText 有内容就实时显示，哪怕正在加载中 */}
             <div className="whitespace-pre-wrap text-gray-800">
-              {pronunciation}
+              {annotatedText}
 
               {/* 2. 只有在加载中且内容还没出全时，显示一个打字机光标 */}
               {isAnnotating && (
@@ -175,7 +176,7 @@ export default function TranslatorPage() {
               )}
             </div>
             {/* 3. 如果完全没内容且正在加载，可以显示大 Loading */}
-            {isAnnotating && !pronunciation && (
+            {isAnnotating && !annotatedText && (
               <div className="absolute inset-0 flex items-center justify-center bg-white/50">
                 <p className="text-xs text-gray-400">正在标注...</p>
               </div>
@@ -185,7 +186,6 @@ export default function TranslatorPage() {
       </div>
       <button
         onClick={() => {
-          setPronunciation('');
           translate(input)
         }}
         className="w-full mt-4 bg-black text-white py-3 rounded-xl"
