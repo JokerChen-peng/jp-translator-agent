@@ -1,13 +1,23 @@
 import { google } from '@ai-sdk/google';
 import { embed, embedMany, streamText } from 'ai';
-import { cosineSimilarity, splitKnowledge, topKBySimilarity } from '@/lib/rag';
+import {
+  cosineSimilarity,
+  fusedMultiplicativeScore,
+  keywordOverlapScore,
+  splitKnowledge,
+  topKBySimilarity,
+} from '@/lib/rag';
 
 export const runtime = 'edge';
 
 const embeddingModel = google.embedding('gemini-embedding-001');
 const RAG_TOP_K = 3;
-/** 余弦相似度下限；低于此值的 chunk 不注入（可按实际语料微调，常见试算区间约 0.3～0.55） */
-const RAG_MIN_COSINE = 0.35;
+/**
+ * 混合分下限：fused = cosine * (1 + λ * keyword)；keyword=0 时与纯余弦相同，阈值可沿用原试算区间。
+ */
+const RAG_MIN_FUSED_SCORE = 0.35;
+/** 关键词加成强度；越大则专名/字面命中对排序影响越大 */
+const RAG_KEYWORD_LAMBDA = 0.55;
 /** Base64 字符数上限（约对应数 MB 原图，避免压满 Edge 请求体） */
 const MAX_IMAGE_BASE64_LEN = 6_500_000;
 
@@ -124,12 +134,19 @@ export async function POST(req: Request) {
           google: { taskType: 'RETRIEVAL_DOCUMENT' },
         },
       });
-      const scores = docVecs.map((v) => cosineSimilarity(queryVec, v));
+      const cosineScores = docVecs.map((v) => cosineSimilarity(queryVec, v));
+      const fusedScores = chunks.map((chunk, i) =>
+        fusedMultiplicativeScore(
+          cosineScores[i]!,
+          keywordOverlapScore(prompt, chunk),
+          RAG_KEYWORD_LAMBDA,
+        ),
+      );
       const top = topKBySimilarity(
         chunks,
-        scores,
+        fusedScores,
         RAG_TOP_K,
-        RAG_MIN_COSINE,
+        RAG_MIN_FUSED_SCORE,
       );
       if (top.length > 0) {
         ragSection = `
