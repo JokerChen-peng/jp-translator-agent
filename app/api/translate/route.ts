@@ -1,23 +1,27 @@
 import { google } from '@ai-sdk/google';
 import { streamText } from 'ai';
 
-// 强制使用 Edge Runtime (可选，但推荐，因为流式传输速度更快)
-export const runtime = 'edge';
-
 export async function POST(req: Request) {
-  const { prompt, context } = await req.json();
-
-  const contextMap: Record<string, string> = {
-    meeting: "大学研究室组会场景。请使用‘丁寧語’（です/ます体），术语翻译要专业。",
-    business: "正式商务邮件。请使用‘尊敬语’和‘謙譲語’，语气务必正式、得体。",
-    friend: "好朋友聊天。请使用‘ため口’（普通体/口语），语气轻松自然。"
+  const { prompt, context,direction } = await req.json();
+  const jaContextMap: Record<string, string> = {
+    meeting: "这是研究室组会。请将中文翻译成专业的日语学术口语（丁寧語），注意专业术语的准确性。",
+    business: "这是商务邮件。请使用标准的敬语（尊敬語/謙譲語），确保格式地道（如：お世話になっております）。",
+    friend: "这是朋友聊天。请使用自然、亲切的日语口语（ため口），可以适当使用助词（ね、よ）。"
   };
-
+  const zhContextMap: Record<string, string> = {
+    meeting: "这是大学研究室组会场景，请使用正式、专业的中文学术口吻。",
+    business: "这是商务办公场景，请使用得体的职场中文，确保符合商务礼仪。",
+    friend: "这是好朋友聊天场景，请使用自然的中文口语，可以带一点亲切感。"
+  };
+  // 根据方向选择对应的指令集
+  const isZhToJa = direction === 'zh-ja';
+  const instruction = isZhToJa ? jaContextMap[context] : zhContextMap[context];
   const result = await streamText({
-    model: google('gemini-3-flash'),
+    model: google('gemini-3.1-flash-lite-preview'), 
     system: `你是一个精通中日互译的专家。
-      当前语境：${contextMap[context] || "通用场景"}。
-      要求：直接输出翻译结果，保持原意，符合当地表达习惯。`,
+      当前任务：${isZhToJa ? '【中译日】' : '【日译中】'}。
+      语境设定：${instruction}。
+      规则：只输出翻译结果，严禁解释，严禁回复多余的内容。`,
     prompt: prompt,
   });
   return result.toTextStreamResponse();
