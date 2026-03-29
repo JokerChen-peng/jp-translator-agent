@@ -32,9 +32,11 @@ export default function TranslatorPage() {
   const [ragEnabled, setRagEnabled] = useState(true);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [pendingImage, setPendingImage] = useState<PendingImage | null>(null);
+  const [imageInstruction, setImageInstruction] = useState('');
   const [previewLightboxOpen, setPreviewLightboxOpen] = useState(false);
   const pendingImageRef = useRef<PendingImage | null>(null);
   const imageTranslateSubmittedRef = useRef(false);
+  const lastSubmittedImageNoteRef = useRef('');
   const [lastFromImage, setLastFromImage] = useState(false);
 
   useEffect(() => {
@@ -77,6 +79,7 @@ export default function TranslatorPage() {
   }, [knowledgeBase]);
 
   const clearPendingImage = useCallback(() => {
+    setImageInstruction('');
     setPendingImage((prev) => {
       if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
       return null;
@@ -118,7 +121,12 @@ export default function TranslatorPage() {
 
   const handleSaveToHistory = () => {
     const sourceInput =
-      input.trim() || (lastFromImage ? '（图片翻译）' : '');
+      input.trim() ||
+      (lastFromImage
+        ? lastSubmittedImageNoteRef.current
+          ? `（图片）说明：${lastSubmittedImageNoteRef.current}`
+          : '（图片翻译）'
+        : '');
     if (!sourceInput || !translatedText) return;
 
     const newItem: HistoryItem = {
@@ -166,12 +174,14 @@ export default function TranslatorPage() {
     if (isTranslating) return;
     if (pendingImage) {
       imageTranslateSubmittedRef.current = true;
+      lastSubmittedImageNoteRef.current = imageInstruction.trim();
       setLastFromImage(true);
       translate('', {
         body: {
           mode: 'translate-image',
           imageBase64: pendingImage.base64,
           imageMediaType: pendingImage.mediaType,
+          imageInstruction: imageInstruction.trim(),
         },
       });
       return;
@@ -222,6 +232,8 @@ export default function TranslatorPage() {
         <TranslatorInputPanel
           input={input}
           onInputChange={setInput}
+          imageInstruction={imageInstruction}
+          onImageInstructionChange={setImageInstruction}
           pendingImage={pendingImage}
           onClearPendingImage={clearPendingImage}
           onOpenPreviewLightbox={() => setPreviewLightboxOpen(true)}

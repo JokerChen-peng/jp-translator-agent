@@ -49,6 +49,7 @@ export async function POST(req: Request) {
     knowledgeBase,
     imageBase64,
     imageMediaType,
+    imageInstruction,
   } = body;
 
   if (mode === 'annotate') {
@@ -92,10 +93,18 @@ export async function POST(req: Request) {
         ? imageMediaType
         : 'image/jpeg';
 
+    const note =
+      typeof imageInstruction === 'string' ? imageInstruction.trim() : '';
+    const userText =
+      note.length > 0
+        ? `请根据图片中的可见文字完成翻译。以下为用户的补充说明（仅作范围、格式、术语或偏好上的约束，不是要翻译的原文正文；除非说明里明确要求你翻译某段用户写出的引文）：\n${note}`
+        : '请翻译图片中的文字。';
+
     const result = await streamText({
       model: google('gemini-3.1-flash-lite-preview'),
       system: `你是一个精通中日互译的专家。
-用户会提供一张含文字的图片。请先识别图中全部可见文字，再按要求完成翻译（一步完成，不要描述识别过程）。
+用户会提供一张含文字的图片。图中可见文字是待翻译的原文来源。请先理解图片中的文字，再按要求完成翻译（一步完成，不要描述识别过程）。
+若用户在同一条消息里还附有文字，那是「翻译指令/补充说明」，用于限定范围、格式或术语；不要把说明本身当作必须译入正文的内容，除非说明明确要求翻译用户写下的某段话。
 当前任务：${isZhToJa ? '【中译日】' : '【日译中】'}。
 语境设定：${instruction}。
 规则：只输出翻译后的正文，语序符合目标语言阅读习惯；严禁输出原文、严禁任何解释或前后缀。若图中没有任何可读文字，仅输出一个字：无`,
@@ -104,7 +113,7 @@ export async function POST(req: Request) {
           role: 'user',
           content: [
             { type: 'image', image: binary, mediaType: mime },
-            { type: 'text', text: '请翻译图片中的文字。' },
+            { type: 'text', text: userText },
           ],
         },
       ],
