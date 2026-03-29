@@ -1,6 +1,6 @@
 import { google } from '@ai-sdk/google';
 import { streamText } from 'ai';
-
+export const runtime = 'edge';
 export async function POST(req: Request) {
   const { prompt, context,direction,mode } = await req.json();
     // 如果是标注模式

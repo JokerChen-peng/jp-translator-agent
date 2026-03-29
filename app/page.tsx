@@ -1,7 +1,7 @@
 'use client';
 
 import { useCompletion } from '@ai-sdk/react';
-import { useState,useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import TranslationHistory, { HistoryItem } from '@/components/TranslationHistory';
 import { useSpeechToText } from '@/hooks/useSpeechToText';
 const CONTEXTS = [
@@ -11,16 +11,16 @@ const CONTEXTS = [
 ];
 
 export default function TranslatorPage() {
- // 增加翻译方向：'ja-zh' (日翻中) 或 'zh-ja' (中翻日)
+  // 增加翻译方向：'ja-zh' (日翻中) 或 'zh-ja' (中翻日)
   const [direction, setDirection] = useState<'ja-zh' | 'zh-ja'>('ja-zh');
   const [input, setInput] = useState('');
   const [currentContext, setCurrentContext] = useState('meeting');
   const [pronunciation, setPronunciation] = useState('');
   const [history, setHistory] = useState<HistoryItem[]>([]);
   // ✅ 集成语音功能
-    const handleSpeechResult = useCallback((result: string) => {
-  setInput(prev => prev + result);
-}, []);
+  const handleSpeechResult = useCallback((result: string) => {
+    setInput(prev => prev + result);
+  }, []);
   const { isListening, startListening, stopListening } = useSpeechToText(handleSpeechResult);
 
   const speechLang = direction === 'ja-zh' ? 'ja-JP' : 'zh-CN';
@@ -29,16 +29,16 @@ export default function TranslatorPage() {
     const saved = localStorage.getItem('translation_history');
     if (saved) setHistory(JSON.parse(saved));
   }, []);
- 
-  const { completion: translatedText, complete:translate, isLoading:isTranslating } = useCompletion({
+
+  const { completion: translatedText, complete: translate, isLoading: isTranslating } = useCompletion({
     api: '/api/translate',
-    body: { context: currentContext,direction,mode: 'translate' },
+    body: { context: currentContext, direction, mode: 'translate' },
     streamProtocol: 'text',
   });
   // 新增：标注钩子
   const { complete: getAnnotate, isLoading: isAnnotating } = useCompletion({
     api: '/api/translate',
-    body: { mode: 'annotate' }, 
+    body: { mode: 'annotate' },
     streamProtocol: 'text',
     onFinish: (prompt, result) => setPronunciation(result),
   });
@@ -63,18 +63,17 @@ export default function TranslatorPage() {
   };
 
   return (
-  <div className="max-w-2xl mx-auto p-8">
+    <div className="max-w-2xl mx-auto p-8">
       {/* 1. 语境选择栏 */}
       <div className="flex gap-2 mb-6 justify-center">
         {CONTEXTS.map((ctx) => (
           <button
             key={ctx.id}
             onClick={() => setCurrentContext(ctx.id)}
-            className={`px-4 py-2 rounded-full text-sm transition-all ${
-              currentContext === ctx.id 
-                ? `${ctx.color} text-white shadow-lg scale-105` 
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
+            className={`px-4 py-2 rounded-full text-sm transition-all ${currentContext === ctx.id
+              ? `${ctx.color} text-white shadow-lg scale-105`
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
           >
             {ctx.label}
           </button>
@@ -83,18 +82,18 @@ export default function TranslatorPage() {
 
       {/* 2. 中日切换栏 */}
       <div className="flex justify-end mb-4">
-         <button onClick={() => setDirection(d => d === 'ja-zh' ? 'zh-ja' : 'ja-zh')} className="...">
-            {direction === 'ja-zh' ? '🇯🇵 日 → 🇨🇳 中' : '🇨🇳 中 → 🇯🇵 日'}
-         </button>
+        <button onClick={() => setDirection(d => d === 'ja-zh' ? 'zh-ja' : 'ja-zh')} className="...">
+          {direction === 'ja-zh' ? '🇯🇵 日 → 🇨🇳 中' : '🇨🇳 中 → 🇯🇵 日'}
+        </button>
       </div>
 
       {/* 3. 输入/输出框 */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        
+
         {/* 第一列：输入框 */}
         <div className="space-y-2">
           <label className="text-xs font-bold text-gray-400">INPUT</label>
-          <textarea 
+          <textarea
             className="w-full h-64 p-4 border rounded-2xl shadow-sm outline-none focus:ring-2 focus:ring-black"
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -103,11 +102,10 @@ export default function TranslatorPage() {
           {/* ✅ 语音输入按钮 */}
           <button
             onClick={() => isListening ? stopListening() : startListening(speechLang)}
-            className={`absolute bottom-4 right-4 p-3 rounded-full transition-all ${
-              isListening 
-                ? 'bg-red-500 text-white animate-pulse' 
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
+            className={`absolute bottom-4 right-4 p-3 rounded-full transition-all ${isListening
+              ? 'bg-red-500 text-white animate-pulse'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
             title="点击语音输入"
           >
             {isListening ? '🛑' : '🎤'}
@@ -117,78 +115,100 @@ export default function TranslatorPage() {
         {/* 第二列：翻译结果 */}
         <div className="space-y-2 relative">
           <label className="text-xs font-bold text-gray-400">TRANSLATION</label>
-        {/* 这是包裹翻译结果和按钮的容器，必须有 'relative' 类 */}
-  <div className="w-full h-64 p-4 border rounded-2xl bg-white shadow-sm overflow-y-auto">
-    {isTranslating ? (
-      <span className="animate-pulse text-gray-400">正在生成...</span>
-    ) : (
-      translatedText
-    )}
+          {/* 这是包裹翻译结果和按钮的容器，必须有 'relative' 类 */}
+          <div className="w-full h-64 p-4 border rounded-2xl bg-white shadow-sm overflow-y-auto">
+            {/* 1. 只要 translatedText 有内容就实时显示，哪怕正在加载中 */}
+            <div className="whitespace-pre-wrap text-gray-800">
+              {translatedText}
 
-    {/* 只有在翻译出结果且不再加载时显示功能按钮 */}
-    {translatedText && !isTranslating && (
-      <>
-        {/* ✅ 新位置 1：左下角 - 存入历史按钮 (星星) */}
-        {/* 这是一个更小、独立、精致的按钮样式 */}
-        <button 
-          onClick={handleSaveToHistory}
-          title="存入历史记录"
-          className="absolute bottom-4 left-4 p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-xs font-bold flex items-center gap-1 shadow-inner"
-        >
-          {/* <span className="text-sm">⭐</span>  */}
-          存入
-        </button>
+              {/* 2. 只有在加载中且内容还没出全时，显示一个打字机光标 */}
+              {isTranslating && (
+                <span className="inline-block w-1.5 h-5 ml-1 bg-blue-500 animate-pulse align-middle" />
+              )}
+            </div>
+            {/* 3. 如果完全没内容且正在加载，可以显示大 Loading */}
+            {isTranslating && !translatedText && (
+              <div className="absolute inset-0 flex items-center justify-center bg-white/50">
+                <p className="text-xs text-gray-400">正在翻译...</p>
+              </div>
+            )}
 
-        {/* ✅ 保持原位置 2：右下角 - 显示五十音按钮 (橙色药丸) */}
-        {/* 这里保持原样，没有任何修改 */}
-        <button 
-          onClick={() => getAnnotate(translatedText)}
-          disabled={isAnnotating}
-          className="absolute bottom-4 right-4 px-3 py-1 bg-orange-500 text-white text-xs rounded-full hover:bg-orange-600 transition-all shadow-md font-medium"
-        >
-          {isAnnotating ? '标注中...' : '显示五十音'}
-        </button>
-      </>
-    )}
-  </div>
+            {/* 只有在翻译出结果且不再加载时显示功能按钮 */}
+            {translatedText && !isTranslating && (
+              <>
+                {/* ✅ 新位置 1：左下角 - 存入历史按钮 (星星) */}
+                {/* 这是一个更小、独立、精致的按钮样式 */}
+                <button
+                  onClick={handleSaveToHistory}
+                  title="存入历史记录"
+                  className="absolute bottom-4 left-4 p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-xs font-bold flex items-center gap-1 shadow-inner"
+                >
+                  {/* <span className="text-sm">⭐</span>  */}
+                  存入
+                </button>
+
+                {/* ✅ 保持原位置 2：右下角 - 显示五十音按钮 (橙色药丸) */}
+                {/* 这里保持原样，没有任何修改 */}
+                <button
+                  onClick={() => getAnnotate(translatedText)}
+                  disabled={isAnnotating}
+                  className="absolute bottom-4 right-4 px-3 py-1 bg-orange-500 text-white text-xs rounded-full hover:bg-orange-600 transition-all shadow-md font-medium"
+                >
+                  {isAnnotating ? '标注中...' : '显示五十音'}
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         {/* 第三列：五十音/罗马音（对应你画的红框） */}
         <div className="space-y-2">
           <label className="text-xs font-bold text-gray-400">PRONUNCIATION</label>
           <div className="w-full h-64 p-4 border border-dashed border-orange-200 rounded-2xl bg-orange-50/30 overflow-y-auto">
-            <p className="text-sm leading-loose whitespace-pre-wrap text-orange-900 font-medium">
-              {pronunciation || (isAnnotating ? "正在努力标注..." : "点击左侧按钮获取读音")}
-            </p>
+            {/* 1. 只要 translatedText 有内容就实时显示，哪怕正在加载中 */}
+            <div className="whitespace-pre-wrap text-gray-800">
+              {pronunciation}
+
+              {/* 2. 只有在加载中且内容还没出全时，显示一个打字机光标 */}
+              {isAnnotating && (
+                <span className="inline-block w-1.5 h-5 ml-1 bg-blue-500 animate-pulse align-middle" />
+              )}
+            </div>
+            {/* 3. 如果完全没内容且正在加载，可以显示大 Loading */}
+            {isAnnotating && !pronunciation && (
+              <div className="absolute inset-0 flex items-center justify-center bg-white/50">
+                <p className="text-xs text-gray-400">正在标注...</p>
+              </div>
+            )}
           </div>
         </div>
-      </div> 
-      <button 
-        onClick={() =>{
+      </div>
+      <button
+        onClick={() => {
           setPronunciation('');
           translate(input)
-        } }
+        }}
         className="w-full mt-4 bg-black text-white py-3 rounded-xl"
       >
         {isTranslating ? '正在分析语境并翻译...' : '立即翻译'}
       </button>
       {/* ✅ 第四列：引用独立组件 */}
-        <div className="h-[600px]">
-          <TranslationHistory 
-           items={history} 
-            onClear={() => { setHistory([]); localStorage.removeItem('translation_history'); }}
-            onItemClick={(item) => {
-              setInput(item.input);
-              // 这里可以根据需要决定是否自动触发翻译
-            }}
-            onDeleteItem={(id) => {
-              // 额外增加一个删除单条的功能
-              const updated = history.filter(h => h.id !== id);
-              setHistory(updated);
-              localStorage.setItem('translation_history', JSON.stringify(updated));
-            }}
-          />
-        </div>
+      <div className="h-[600px]">
+        <TranslationHistory
+          items={history}
+          onClear={() => { setHistory([]); localStorage.removeItem('translation_history'); }}
+          onItemClick={(item) => {
+            setInput(item.input);
+            // 这里可以根据需要决定是否自动触发翻译
+          }}
+          onDeleteItem={(id) => {
+            // 额外增加一个删除单条的功能
+            const updated = history.filter(h => h.id !== id);
+            setHistory(updated);
+            localStorage.setItem('translation_history', JSON.stringify(updated));
+          }}
+        />
+      </div>
     </div>
   );
 }
