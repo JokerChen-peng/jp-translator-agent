@@ -3,6 +3,10 @@
 import { useCompletion } from '@ai-sdk/react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import TranslationHistory, { HistoryItem } from '@/components/TranslationHistory';
+import {
+  downloadHistoryJson,
+  mergeHistoryImportWins,
+} from '@/lib/historyBackup';
 import { useSpeechToText } from '@/hooks/useSpeechToText';
 import { useTextToSpeech } from '@/hooks/useTextToSpeech';
 import { useAutoScroll } from '@/hooks/useAutoScroll';
@@ -389,6 +393,12 @@ export default function TranslatorPage() {
             const updated = history.filter(h => h.id !== id);
             setHistory(updated);
             localStorage.setItem('translation_history', JSON.stringify(updated));
+          }}
+          onExport={() => downloadHistoryJson(history)}
+          onImportValidated={(incoming) => {
+            const merged = mergeHistoryImportWins(history, incoming);
+            setHistory(merged);
+            localStorage.setItem('translation_history', JSON.stringify(merged));
           }}
         />
       </div>
