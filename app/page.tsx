@@ -1,8 +1,9 @@
 'use client';
 
 import { useCompletion } from '@ai-sdk/react';
-import { useState,useEffect } from 'react';
+import { useState,useEffect, useCallback } from 'react';
 import TranslationHistory, { HistoryItem } from '@/components/TranslationHistory';
+import { useSpeechToText } from '@/hooks/useSpeechToText';
 const CONTEXTS = [
   { id: 'meeting', label: '🏫 组会', color: 'bg-blue-500' },
   { id: 'business', label: '💼 商务', color: 'bg-green-600' },
@@ -16,6 +17,13 @@ export default function TranslatorPage() {
   const [currentContext, setCurrentContext] = useState('meeting');
   const [pronunciation, setPronunciation] = useState('');
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  // ✅ 集成语音功能
+    const handleSpeechResult = useCallback((result: string) => {
+  setInput(prev => prev + result);
+}, []);
+  const { isListening, startListening, stopListening } = useSpeechToText(handleSpeechResult);
+
+  const speechLang = direction === 'ja-zh' ? 'ja-JP' : 'zh-CN';
   // 1. 初始化加载
   useEffect(() => {
     const saved = localStorage.getItem('translation_history');
@@ -92,6 +100,18 @@ export default function TranslatorPage() {
             onChange={(e) => setInput(e.target.value)}
             placeholder="输入内容..."
           />
+          {/* ✅ 语音输入按钮 */}
+          <button
+            onClick={() => isListening ? stopListening() : startListening(speechLang)}
+            className={`absolute bottom-4 right-4 p-3 rounded-full transition-all ${
+              isListening 
+                ? 'bg-red-500 text-white animate-pulse' 
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+            title="点击语音输入"
+          >
+            {isListening ? '🛑' : '🎤'}
+          </button>
         </div>
 
         {/* 第二列：翻译结果 */}
