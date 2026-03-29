@@ -1,10 +1,52 @@
 'use client';
 
 import { useCompletion } from '@ai-sdk/react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import TranslationHistory, { HistoryItem } from '@/components/TranslationHistory';
 import { useSpeechToText } from '@/hooks/useSpeechToText';
 import { useAutoScroll } from '@/hooks/useAutoScroll';
+
+/** 缩放并转为 JPEG，控制体积与 Edge 请求上限 */
+function fileToCompressedBase64(
+  file: File,
+  maxWidth = 1280,
+  quality = 0.82,
+): Promise<{ base64: string; mediaType: string }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (width > maxWidth) {
+        height = Math.round((height * maxWidth) / width);
+        width = maxWidth;
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('canvas'));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, width, height);
+      const dataUrl = canvas.toDataURL('image/jpeg', quality);
+      const base64 = dataUrl.split(',')[1] ?? '';
+      if (!base64) {
+        reject(new Error('encode'));
+        return;
+      }
+      resolve({ base64, mediaType: 'image/jpeg' });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('图片无法加载'));
+    };
+    img.src = url;
+  });
+}
+
 const CONTEXTS = [
   { id: 'meeting', label: '🏫 组会', color: 'bg-blue-500' },
   { id: 'business', label: '💼 商务', color: 'bg-green-600' },
@@ -19,6 +61,9 @@ export default function TranslatorPage() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [knowledgeBase, setKnowledgeBase] = useState('');
   const [ragEnabled, setRagEnabled] = useState(true);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [lastFromImage, setLastFromImage] = useState(false);
 
   // ✅ 集成语音功能
   const handleSpeechResult = useCallback((result: string) => {
@@ -60,11 +105,12 @@ export default function TranslatorPage() {
 
   //新增：手动保存逻辑
   const handleSaveToHistory = () => {
-    if (!input || !translatedText) return;
+    const sourceInput = input.trim() || (lastFromImage ? '（图片翻译）' : '');
+    if (!sourceInput || !translatedText) return;
 
     const newItem: HistoryItem = {
       id: Date.now().toString(),
-      input: input,
+      input: sourceInput,
       output: translatedText,
       direction: direction,
       timestamp: Date.now(),
@@ -75,6 +121,37 @@ export default function TranslatorPage() {
     localStorage.setItem('translation_history', JSON.stringify(updated));
     // 保存后可以给用户一个简单的反馈，或者让按钮置灰
   };
+
+  const handleImageFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file?.type.startsWith('image/')) return;
+    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+    const preview = URL.createObjectURL(file);
+    setImagePreviewUrl(preview);
+    setLastFromImage(true);
+    try {
+      const { base64, mediaType } = await fileToCompressedBase64(file);
+      await translate('', {
+        body: {
+          mode: 'translate-image',
+          imageBase64: base64,
+          imageMediaType: mediaType,
+        },
+      });
+    } catch {
+      setLastFromImage(false);
+      URL.revokeObjectURL(preview);
+      setImagePreviewUrl(null);
+      alert('图片翻译失败，请换一张或缩小图片后重试');
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+    };
+  }, [imagePreviewUrl]);
 
   return (
     <div className="max-w-2xl mx-auto p-8">
@@ -219,14 +296,58 @@ export default function TranslatorPage() {
           </div>
         </div>
       </div>
-      <button
-        onClick={() => {
-          translate(input)
-        }}
-        className="w-full mt-4 bg-black text-white py-3 rounded-xl"
-      >
-        {isTranslating ? '正在分析语境并翻译...' : '立即翻译'}
-      </button>
+
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleImageFile}
+      />
+
+      <div className="flex flex-col sm:flex-row gap-3 mt-4">
+        <button
+          type="button"
+          disabled={isTranslating}
+          onClick={() => {
+            setLastFromImage(false);
+            translate(input);
+          }}
+          className="flex-1 bg-black text-white py-3 rounded-xl disabled:opacity-50"
+        >
+          {isTranslating && !lastFromImage
+            ? '正在分析语境并翻译...'
+            : '立即翻译'}
+        </button>
+        <button
+          type="button"
+          onClick={() => imageInputRef.current?.click()}
+          disabled={isTranslating}
+          className="flex-1 py-3 rounded-xl border-2 border-gray-300 bg-white text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+        >
+          {isTranslating && lastFromImage ? '正在识别图片并翻译…' : '📷 图片翻译'}
+        </button>
+      </div>
+
+      {imagePreviewUrl && (
+        <div className="mt-3 flex items-center gap-3">
+          <img
+            src={imagePreviewUrl}
+            alt="待译预览"
+            className="h-16 w-auto max-w-[120px] rounded-lg border object-cover"
+          />
+          <button
+            type="button"
+            className="text-xs text-gray-500 underline"
+            onClick={() => {
+              if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+              setImagePreviewUrl(null);
+            }}
+          >
+            清除预览
+          </button>
+        </div>
+      )}
       {/* ✅ 第四列：引用独立组件 */}
       <div className="h-[600px]">
         <TranslationHistory
