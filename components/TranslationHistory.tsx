@@ -89,7 +89,7 @@ export default function TranslationHistory({
           </div>
         </div>
         <p className="text-[9px] text-gray-400 leading-snug">
-          导入时按 id 合并，同 id 以文件为准，最多保留 50 条。
+          导入 JSON 经 Schema（Ajv）校验后按 id 合并，同 id 以文件为准，最多保留 50 条。
         </p>
       </div>
 

@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://jp-translator-agent.local/schemas/translation-history-import.schema.json",
+  "title": "TranslationHistoryImport",
+  "description": "翻译历史导入：支持记录数组，或与导出一致的 { version?, exportedAt?, items } 包装对象。",
+  "oneOf": [
+    {
+      "type": "array",
+      "items": { "$ref": "#/definitions/historyItem" }
+    },
+    {
+      "type": "object",
+      "required": ["items"],
+      "additionalProperties": true,
+      "properties": {
+        "version": { "type": "integer", "minimum": 1 },
+        "exportedAt": { "type": "string" },
+        "items": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/historyItem" }
+        }
+      }
+    }
+  ],
+  "definitions": {
+    "historyItem": {
+      "type": "object",
+      "required": ["id", "input", "output", "direction", "timestamp"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "input": { "type": "string" },
+        "output": { "type": "string" },
+        "direction": { "enum": ["ja-zh", "zh-ja"] },
+        "timestamp": { "type": "number" }
+      }
+    }
+  }
+}

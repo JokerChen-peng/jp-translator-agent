@@ -1,4 +1,5 @@
 import type { HistoryItem } from '@/lib/historyTypes';
+import { validateHistoryImportBySchema } from '@/lib/historyImportJsonSchema';
 
 export const HISTORY_EXPORT_VERSION = 1;
 export const HISTORY_MAX_ITEMS = 50;
@@ -9,20 +10,9 @@ export type HistoryExportPayload = {
   items: HistoryItem[];
 };
 
-function isHistoryItem(x: unknown): x is HistoryItem {
-  if (typeof x !== 'object' || x === null) return false;
-  const o = x as Record<string, unknown>;
-  return (
-    typeof o.id === 'string' &&
-    o.id.length > 0 &&
-    typeof o.input === 'string' &&
-    typeof o.output === 'string' &&
-    (o.direction === 'ja-zh' || o.direction === 'zh-ja') &&
-    typeof o.timestamp === 'number' &&
-    Number.isFinite(o.timestamp)
-  );
-}
-
+/**
+ * 解析导入 JSON，并用 JSON Schema（Ajv）校验根结构与每条记录。
+ */
 export function parseHistoryImportJson(
   raw: string,
 ): { ok: true; items: HistoryItem[] } | { ok: false; error: string } {
@@ -33,28 +23,7 @@ export function parseHistoryImportJson(
     return { ok: false, error: '不是合法的 JSON' };
   }
 
-  let arr: unknown[];
-  if (Array.isArray(data)) {
-    arr = data;
-  } else if (typeof data === 'object' && data !== null && 'items' in data) {
-    const items = (data as { items?: unknown }).items;
-    if (!Array.isArray(items)) {
-      return { ok: false, error: 'items 必须是数组' };
-    }
-    arr = items;
-  } else {
-    return { ok: false, error: '根节点须为 { items: [] } 或记录数组' };
-  }
-
-  const out: HistoryItem[] = [];
-  for (let i = 0; i < arr.length; i++) {
-    const row = arr[i];
-    if (!isHistoryItem(row)) {
-      return { ok: false, error: `第 ${i + 1} 条记录字段不合法（需 id/input/output/direction/timestamp）` };
-    }
-    out.push(row);
-  }
-  return { ok: true, items: out };
+  return validateHistoryImportBySchema(data);
 }
 
 /**
