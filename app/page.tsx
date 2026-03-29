@@ -4,6 +4,7 @@ import { useCompletion } from '@ai-sdk/react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import TranslationHistory, { HistoryItem } from '@/components/TranslationHistory';
 import { useSpeechToText } from '@/hooks/useSpeechToText';
+import { useTextToSpeech } from '@/hooks/useTextToSpeech';
 import { useAutoScroll } from '@/hooks/useAutoScroll';
 
 /** 缩放并转为 JPEG，控制体积与 Edge 请求上限 */
@@ -70,8 +71,12 @@ export default function TranslatorPage() {
     setInput(prev => prev + result);
   }, []);
   const { isListening, startListening, stopListening } = useSpeechToText(handleSpeechResult);
+  const { speak, stop: stopSpeaking, isSpeaking, supported: ttsSupported } =
+    useTextToSpeech();
 
   const speechLang = direction === 'ja-zh' ? 'ja-JP' : 'zh-CN';
+  /** 译文语言：日译中 → 中文朗读，中译日 → 日文朗读 */
+  const ttsLang = direction === 'ja-zh' ? 'zh-CN' : 'ja-JP';
   // 1. 初始化加载
   useEffect(() => {
     const saved = localStorage.getItem('translation_history');
@@ -95,6 +100,11 @@ export default function TranslatorPage() {
     streamProtocol: 'text',
   });
   const scrolltranslatedContainerRef = useAutoScroll(translatedText);
+
+  useEffect(() => {
+    if (isTranslating) stopSpeaking();
+  }, [isTranslating, stopSpeaking]);
+
   // 新增：标注钩子
   const { completion: annotatedText, complete: getAnnotate, isLoading: isAnnotating } = useCompletion({
     api: '/api/translate',
@@ -228,48 +238,65 @@ export default function TranslatorPage() {
         {/* 第二列：翻译结果 */}
         <div className="space-y-2 relative">
           <label className="text-xs font-bold text-gray-400">TRANSLATION</label>
-          {/* 这是包裹翻译结果和按钮的容器，必须有 'relative' 类 */}
-          <div className="w-full h-64 p-4 border rounded-2xl bg-white shadow-sm overflow-y-auto" ref={scrolltranslatedContainerRef}>
-            {/* 1. 只要 translatedText 有内容就实时显示，哪怕正在加载中 */}
-            <div className="whitespace-pre-wrap text-gray-800">
-              {translatedText}
-
-              {/* 2. 只有在加载中且内容还没出全时，显示一个打字机光标 */}
-              {isTranslating && (
-                <span className="inline-block w-1.5 h-5 ml-1 bg-blue-500 animate-pulse align-middle" />
+          <div className="flex flex-col h-64 border rounded-2xl bg-white shadow-sm overflow-hidden">
+            <div
+              className="flex-1 min-h-0 overflow-y-auto p-4 relative"
+              ref={scrolltranslatedContainerRef}
+            >
+              <div className="whitespace-pre-wrap text-gray-800">
+                {translatedText}
+                {isTranslating && (
+                  <span className="inline-block w-1.5 h-5 ml-1 bg-blue-500 animate-pulse align-middle" />
+                )}
+              </div>
+              {isTranslating && !translatedText && (
+                <div className="absolute inset-0 flex items-center justify-center bg-white/50">
+                  <p className="text-xs text-gray-400">正在翻译...</p>
+                </div>
               )}
             </div>
-            {/* 3. 如果完全没内容且正在加载，可以显示大 Loading */}
-            {isTranslating && !translatedText && (
-              <div className="absolute inset-0 flex items-center justify-center bg-white/50">
-                <p className="text-xs text-gray-400">正在翻译...</p>
-              </div>
-            )}
 
-            {/* 只有在翻译出结果且不再加载时显示功能按钮 */}
             {translatedText && !isTranslating && (
-              <>
-                {/* ✅ 新位置 1：左下角 - 存入历史按钮 (星星) */}
-                {/* 这是一个更小、独立、精致的按钮样式 */}
-                <button
-                  onClick={handleSaveToHistory}
-                  title="存入历史记录"
-                  className="absolute bottom-4 left-4 p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-xs font-bold flex items-center gap-1 shadow-inner"
-                >
-                  {/* <span className="text-sm">⭐</span>  */}
-                  存入
-                </button>
-
-                {/* ✅ 保持原位置 2：右下角 - 显示五十音按钮 (橙色药丸) */}
-                {/* 这里保持原样，没有任何修改 */}
-                <button
-                  onClick={() => getAnnotate(translatedText)}
-                  disabled={isAnnotating}
-                  className="absolute bottom-4 right-4 px-3 py-1 bg-orange-500 text-white text-xs rounded-full hover:bg-orange-600 transition-all shadow-md font-medium"
-                >
-                  {isAnnotating ? '标注中...' : '显示五十音'}
-                </button>
-              </>
+              <div className="flex-shrink-0 border-t border-gray-100 bg-gray-50 px-2 py-2">
+                <div className="flex flex-wrap items-stretch justify-center gap-1.5 sm:gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSaveToHistory}
+                    title="存入历史记录"
+                    className="translation-action-btn"
+                  >
+                    存入
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      isSpeaking
+                        ? stopSpeaking()
+                        : speak(translatedText, ttsLang)
+                    }
+                    disabled={!ttsSupported}
+                    title={
+                      ttsSupported
+                        ? isSpeaking
+                          ? '停止朗读'
+                          : `朗读译文（${ttsLang === 'zh-CN' ? '中文' : '日文'}）`
+                        : '当前浏览器不支持语音合成'
+                    }
+                    className={`translation-action-btn ${isSpeaking ? 'translation-action-btn--active' : ''}`}
+                  >
+                    {isSpeaking ? '停止' : '🔊 朗读'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => getAnnotate(translatedText)}
+                    disabled={isAnnotating}
+                    title="为日语译文标注假名"
+                    className="translation-action-btn disabled:opacity-40"
+                  >
+                    {isAnnotating ? '标注中…' : '五十音'}
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         </div>
