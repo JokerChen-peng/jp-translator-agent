@@ -1,7 +1,7 @@
 'use client';
 
 import { useCompletion } from '@ai-sdk/react';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import TranslationHistory, { HistoryItem } from '@/components/TranslationHistory';
 import {
   downloadHistoryJson,
@@ -58,6 +58,12 @@ const CONTEXTS = [
   { id: 'friend', label: '🍺 朋友', color: 'bg-orange-500' }
 ];
 
+type PendingImage = {
+  previewUrl: string;
+  base64: string;
+  mediaType: string;
+};
+
 export default function TranslatorPage() {
   // 增加翻译方向：'ja-zh' (日翻中) 或 'zh-ja' (中翻日)
   const [direction, setDirection] = useState<'ja-zh' | 'zh-ja'>('ja-zh');
@@ -67,8 +73,28 @@ export default function TranslatorPage() {
   const [knowledgeBase, setKnowledgeBase] = useState('');
   const [ragEnabled, setRagEnabled] = useState(true);
   const imageInputRef = useRef<HTMLInputElement>(null);
-  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [pendingImage, setPendingImage] = useState<PendingImage | null>(null);
+  const [previewLightboxOpen, setPreviewLightboxOpen] = useState(false);
+  const pendingImageRef = useRef<PendingImage | null>(null);
+  const imageTranslateSubmittedRef = useRef(false);
   const [lastFromImage, setLastFromImage] = useState(false);
+
+  useEffect(() => {
+    pendingImageRef.current = pendingImage;
+  }, [pendingImage]);
+
+  useEffect(() => {
+    if (!pendingImage) setPreviewLightboxOpen(false);
+  }, [pendingImage]);
+
+  useEffect(() => {
+    if (!previewLightboxOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPreviewLightboxOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [previewLightboxOpen]);
 
   // ✅ 集成语音功能
   const handleSpeechResult = useCallback((result: string) => {
@@ -93,6 +119,13 @@ export default function TranslatorPage() {
     localStorage.setItem('translation_knowledge', knowledgeBase);
   }, [knowledgeBase]);
 
+  const clearPendingImage = useCallback(() => {
+    setPendingImage((prev) => {
+      if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
+      return null;
+    });
+  }, []);
+
   const { completion: translatedText, complete: translate, isLoading: isTranslating } = useCompletion({
     api: '/api/translate',
     body: {
@@ -102,6 +135,14 @@ export default function TranslatorPage() {
       knowledgeBase: ragEnabled ? knowledgeBase : '',
     },
     streamProtocol: 'text',
+    onFinish: () => {
+      if (!imageTranslateSubmittedRef.current) return;
+      imageTranslateSubmittedRef.current = false;
+      clearPendingImage();
+    },
+    onError: () => {
+      imageTranslateSubmittedRef.current = false;
+    },
   });
   const scrolltranslatedContainerRef = useAutoScroll(translatedText);
 
@@ -140,35 +181,79 @@ export default function TranslatorPage() {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file?.type.startsWith('image/')) return;
-    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+    if (pendingImage?.previewUrl) URL.revokeObjectURL(pendingImage.previewUrl);
     const preview = URL.createObjectURL(file);
-    setImagePreviewUrl(preview);
-    setLastFromImage(true);
     try {
       const { base64, mediaType } = await fileToCompressedBase64(file);
-      await translate('', {
-        body: {
-          mode: 'translate-image',
-          imageBase64: base64,
-          imageMediaType: mediaType,
-        },
-      });
-    } catch {
+      setPendingImage({ previewUrl: preview, base64, mediaType });
       setLastFromImage(false);
+    } catch {
       URL.revokeObjectURL(preview);
-      setImagePreviewUrl(null);
-      alert('图片翻译失败，请换一张或缩小图片后重试');
+      alert('图片处理失败，请换一张或缩小图片后重试');
     }
   };
 
   useEffect(() => {
     return () => {
-      if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+      const p = pendingImageRef.current;
+      if (p?.previewUrl) URL.revokeObjectURL(p.previewUrl);
     };
-  }, [imagePreviewUrl]);
+  }, []);
+
+  const canSubmitTranslate = useMemo(
+    () =>
+      Boolean(pendingImage?.base64) ||
+      Boolean(input.trim()),
+    [pendingImage, input],
+  );
+
+  const handleMainTranslate = () => {
+    if (isTranslating) return;
+    if (pendingImage) {
+      imageTranslateSubmittedRef.current = true;
+      setLastFromImage(true);
+      translate('', {
+        body: {
+          mode: 'translate-image',
+          imageBase64: pendingImage.base64,
+          imageMediaType: pendingImage.mediaType,
+        },
+      });
+      return;
+    }
+    imageTranslateSubmittedRef.current = false;
+    setLastFromImage(false);
+    translate(input);
+  };
 
   return (
     <div className="max-w-2xl mx-auto p-8">
+      {previewLightboxOpen && pendingImage && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="图片大图预览"
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setPreviewLightboxOpen(false)}
+        >
+          <button
+            type="button"
+            className="absolute right-4 top-4 z-10 rounded-full bg-white px-3 py-1.5 text-sm font-medium text-gray-900 shadow-md hover:bg-gray-100"
+            onClick={(e) => {
+              e.stopPropagation();
+              setPreviewLightboxOpen(false);
+            }}
+          >
+            关闭
+          </button>
+          <img
+            src={pendingImage.previewUrl}
+            alt="大图预览"
+            className="max-h-[min(90vh,100%)] max-w-[min(95vw,100%)] rounded-lg object-contain shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
       {/* 1. 语境选择栏 */}
       <div className="flex gap-2 mb-6 justify-center">
         {CONTEXTS.map((ctx) => (
@@ -192,23 +277,32 @@ export default function TranslatorPage() {
         </button>
       </div>
 
-      {/* RAG 知识库 */}
-      <div className="mb-6 p-4 rounded-2xl border border-gray-200 bg-gray-50/80 space-y-2">
+      {/* RAG 知识库（待译图片时不可用） */}
+      <div
+        className={`mb-6 space-y-2 rounded-2xl border border-gray-200 bg-gray-50/80 p-4 transition-opacity ${pendingImage ? 'pointer-events-none select-none opacity-40' : ''}`}
+        aria-disabled={pendingImage ? true : undefined}
+      >
         <div className="flex items-center justify-between gap-2">
-          <label className="text-xs font-bold text-gray-500">知识库（Gemini Embedding RAG）</label>
-          <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+          <label className="text-xs font-bold text-gray-500">
+            知识库（Gemini Embedding RAG）
+          </label>
+          <label
+            className={`flex items-center gap-2 text-xs text-gray-600 ${pendingImage ? '' : 'cursor-pointer'}`}
+          >
             <input
               type="checkbox"
               checked={ragEnabled}
+              disabled={!!pendingImage}
               onChange={(e) => setRagEnabled(e.target.checked)}
-              className="rounded border-gray-300"
+              className="rounded border-gray-300 disabled:cursor-not-allowed"
             />
             启用检索
           </label>
         </div>
         <textarea
-          className="w-full min-h-[88px] p-3 text-sm border rounded-xl bg-white shadow-sm outline-none focus:ring-2 focus:ring-black resize-y"
+          className="w-full min-h-[88px] resize-y rounded-xl border bg-white p-3 text-sm shadow-sm outline-none focus:ring-2 focus:ring-black disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
           value={knowledgeBase}
+          disabled={!!pendingImage}
           onChange={(e) => setKnowledgeBase(e.target.value)}
           placeholder="每段之间空一行，例如术语表、固定译法、例句。翻译时用向量检索最相关的几段注入语境。"
         />
@@ -217,16 +311,48 @@ export default function TranslatorPage() {
       {/* 3. 输入/输出框 */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
 
-        {/* 第一列：输入框（图标相对边框容器定位，避免穿出圆角边框 / 挡住 resize） */}
+        {/* 第一列：输入框；选图后框内预览 + 置灰，需点「立即翻译」才请求 */}
         <div className="space-y-2">
           <label className="text-xs font-bold text-gray-400">INPUT</label>
-          <div className="relative rounded-2xl border border-gray-200 bg-white shadow-sm">
-            <textarea
-              className="block w-full h-64 min-h-[16rem] resize-y rounded-2xl border-0 bg-transparent p-4 pb-12 pr-[5.25rem] text-[15px] leading-relaxed outline-none focus:ring-2 focus:ring-inset focus:ring-black"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="输入内容，或使用右下角 📷 / 🎤"
-            />
+          <div
+            className={`relative rounded-2xl border shadow-sm transition-colors ${pendingImage ? 'border-gray-300 bg-gray-100' : 'border-gray-200 bg-white'}`}
+          >
+            {pendingImage ? (
+              <div className="flex h-64 min-h-[16rem] flex-col items-center justify-center gap-2 p-4 pb-14">
+                <button
+                  type="button"
+                  onClick={() => setPreviewLightboxOpen(true)}
+                  className="group relative max-h-[11.5rem] max-w-full rounded-lg border border-gray-200 bg-white/50 shadow-sm outline-none ring-black transition hover:ring-2 focus-visible:ring-2"
+                  title="点击查看大图"
+                >
+                  <img
+                    src={pendingImage.previewUrl}
+                    alt="待译预览"
+                    className="max-h-[11.5rem] max-w-full rounded-lg object-contain"
+                  />
+                  <span className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-lg bg-black/0 text-[10px] font-medium text-white opacity-0 transition group-hover:bg-black/35 group-hover:opacity-100">
+                    点击放大
+                  </span>
+                </button>
+                <p className="text-center text-[11px] text-gray-500">
+                  已选图片 · 点击下方「立即翻译」开始识别
+                </p>
+                <button
+                  type="button"
+                  className="text-xs font-medium text-gray-600 underline decoration-gray-400 underline-offset-2 hover:text-gray-900"
+                  onClick={clearPendingImage}
+                >
+                  移除图片
+                </button>
+              </div>
+            ) : (
+              <textarea
+                className="block h-64 min-h-[16rem] w-full resize-y rounded-2xl border-0 bg-transparent p-4 pb-12 pr-[5.25rem] text-[15px] leading-relaxed outline-none focus:ring-2 focus:ring-inset focus:ring-black"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="输入内容，或使用右下角 📷 / 🎤"
+              />
+            )}
             <div className="pointer-events-none absolute bottom-2 right-2 flex items-center gap-1.5">
               <button
                 type="button"
@@ -236,42 +362,24 @@ export default function TranslatorPage() {
                   ? 'bg-amber-100 text-amber-800 animate-pulse'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
-                title={isTranslating && lastFromImage ? '正在识别图片…' : '图片翻译'}
+                title={isTranslating && lastFromImage ? '正在识别图片…' : '选择图片'}
               >
                 📷
               </button>
               <button
                 type="button"
-                onClick={() => isListening ? stopListening() : startListening(speechLang)}
-                className={`pointer-events-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg transition-all ${isListening
+                disabled={!!pendingImage}
+                onClick={() => (isListening ? stopListening() : startListening(speechLang))}
+                className={`pointer-events-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg transition-all disabled:cursor-not-allowed disabled:opacity-35 ${isListening
                   ? 'bg-red-500 text-white animate-pulse'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
-                title="语音输入"
+                title={pendingImage ? '图片模式下请使用「立即翻译」' : '语音输入'}
               >
                 {isListening ? '🛑' : '🎤'}
               </button>
             </div>
           </div>
-          {imagePreviewUrl && (
-            <div className="flex items-center gap-2">
-              <img
-                src={imagePreviewUrl}
-                alt="待译预览"
-                className="h-12 w-auto max-w-[100px] rounded-lg border object-cover"
-              />
-              <button
-                type="button"
-                className="text-[10px] text-gray-500 underline"
-                onClick={() => {
-                  if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
-                  setImagePreviewUrl(null);
-                }}
-              >
-                清除预览
-              </button>
-            </div>
-          )}
         </div>
 
         {/* 第二列：翻译结果 */}
@@ -373,18 +481,17 @@ export default function TranslatorPage() {
 
       <button
         type="button"
-        disabled={isTranslating}
-        onClick={() => {
-          setLastFromImage(false);
-          translate(input);
-        }}
-        className="w-full mt-4 bg-black text-white py-3 rounded-xl disabled:opacity-50"
+        disabled={isTranslating || !canSubmitTranslate}
+        onClick={handleMainTranslate}
+        className="mt-4 w-full rounded-xl bg-black py-3 text-white disabled:opacity-50"
       >
-        {isTranslating && !lastFromImage
-          ? '正在分析语境并翻译...'
-          : isTranslating && lastFromImage
-            ? '正在识别图片并翻译…'
-            : '立即翻译'}
+        {isTranslating && lastFromImage
+          ? '正在识别图片并翻译…'
+          : isTranslating
+            ? '正在分析语境并翻译...'
+            : pendingImage
+              ? '立即翻译（图片）'
+              : '立即翻译'}
       </button>
       {/* ✅ 第四列：引用独立组件 */}
       <div className="h-[600px]">
