@@ -10,11 +10,15 @@ export interface HistoryItem {
   timestamp: number;
 }
 
-interface HistoryProps {
+export interface HistoryProps {
+  /** 存储在本地的翻译记录列表 */
   items: HistoryItem[];
+  /** 清空所有历史记录 */
   onClear: () => void;
+  /** 点击历史项回填输入框 */
   onItemClick: (item: HistoryItem) => void;
-  onDeleteItem: (id: string) => void; // 新增：删除单条
+  /** 删除特定的历史记录项 */
+  onDeleteItem: (id: string) => void;
 }
 
 export default function TranslationHistory({ items, onClear, onItemClick, onDeleteItem }: HistoryProps) {
